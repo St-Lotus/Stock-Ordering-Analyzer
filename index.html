@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Ordering Analyzer - ပစ္စည်းအော်ဒါမှာယူ စစ်ဆေးသုံးသပ်စနစ်</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-fontawesome/6.4.0/css/all.min.css">
+    <!-- SheetJS (xlsx) for Excel processing -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts for Myanmar Text -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Padauk:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', 'Padauk', sans-serif;
+            background-color: #f8fafc;
+        }
+        .status-badge {
+            transition: all 0.2s ease-in-out;
+        }
+        .table-container::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .table-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <!-- Navigation Header -->
+    <header class="bg-indigo-900 text-white shadow-lg border-b border-indigo-800 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 p-2.5 rounded-xl shadow-md">
+                    <i class="fa-solid fa-boxes-stacked text-2xl text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">Stock Ordering Analyzer</h1>
+                    <p class="text-xs text-indigo-200">စတော့အော်ဒါ လိုအပ်ချက် စစ်ဆေးသုံးသပ်စနစ်</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button onclick="downloadTemplate()" class="bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 border border-indigo-700">
+                    <i class="fa-solid fa-file-excel text-emerald-400"></i> Sample Excel တမ်းပလိတ်
+                </button>
+                <button onclick="loadSampleData()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-sm">
+                    <i class="fa-solid fa-vial"></i> နမူနာ ဒေတာဖြင့်စမ်းသပ်ရန်
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+        <!-- Drag & Drop Upload Container -->
+        <div id="dropZone" class="bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-500 rounded-2xl p-6 text-center transition-all shadow-sm relative group cursor-pointer">
+            <input type="file" id="excelFile" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileSelect(event)">
+            <label for="excelFile" class="cursor-pointer flex flex-col items-center justify-center space-y-3">
+                <div class="w-16 h-16 bg-indigo-50 group-hover:bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 transition">
+                    <i class="fa-solid fa-cloud-arrow-up text-3xl"></i>
+                </div>
+                <div>
+                    <span class="text-base font-semibold text-slate-700">Excel ဖိုင်တင်ရန် ဤနေရာတွင် နှိပ်ပါ</span>
+                    <span class="text-sm text-slate-500"> သို့မဟုတ် ဖိုင်ကို ဆွဲထည့်ပါ (.xlsx, .xls, .csv)</span>
+                </div>
+                <p class="text-xs text-slate-400">
+                    လိုအပ်သော ကော်လံများ: <span class="font-semibold text-slate-600">Stock Code, Description, Short Description, Main Vendor, Min Qty, Max Qty, Onhand Qty</span>
+                </p>
+            </label>
+        </div>
+
+        <!-- Analytics & Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Total SKUs -->
+            <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">စုစုပေါင်း ပစ္စည်းအမျိုးအစား</p>
+                    <h3 id="statTotalItems" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                    <p class="text-xs text-slate-400 mt-1">Total SKUs in List</p>
+                </div>
+                <div class="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 text-xl">
+                    <i class="fa-solid fa-list-check"></i>
+                </div>
+            </div>
+
+            <!-- Need Order Card -->
+            <div class="bg-red-50/70 p-5 rounded-2xl border border-red-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-bold text-red-600 uppercase tracking-wider">🚨 အော်ဒါမှာရန် (Order Now)</p>
+                    <h3 id="statNeedOrder" class="text-2xl font-bold text-red-700 mt-1">0</h3>
+                    <p class="text-xs text-red-500 mt-1">Onhand &lt; Min Qty</p>
+                </div>
+                <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center text-red-600 text-xl">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+            </div>
+
+            <!-- Order as Needed Card -->
+            <div class="bg-amber-50/70 p-5 rounded-2xl border border-amber-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-bold text-amber-700 uppercase tracking-wider">⚖️ လိုအပ်သလိုမှာရန် (Optimal)</p>
+                    <h3 id="statOptimal" class="text-2xl font-bold text-amber-800 mt-1">0</h3>
+                    <p class="text-xs text-amber-600 mt-1">Min Qty ≤ Onhand ≤ Max Qty</p>
+                </div>
+                <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 text-xl">
+                    <i class="fa-solid fa-scale-balanced"></i>
+                </div>
+            </div>
+
+            <!-- Sufficient / Overstock Card -->
+            <div class="bg-emerald-50/70 p-5 rounded-2xl border border-emerald-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-bold text-emerald-700 uppercase tracking-wider">✅ ပစ္စည်းလုံလောက်မှုရှိ (Sufficient)</p>
+                    <h3 id="statOverstock" class="text-2xl font-bold text-emerald-800 mt-1">0</h3>
+                    <p class="text-xs text-emerald-600 mt-1">Onhand &gt; Max Qty</p>
+                </div>
+                <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 text-xl">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Optional Visual Chart Header Collapse -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 hidden md:block">
+            <div class="flex justify-between items-center cursor-pointer" onclick="toggleChart()">
+                <h2 class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-indigo-600"></i> စတော့အခြေအနေ ခြုံငုံသုံးသပ်ချက် (Stock Status Summary)
+                </h2>
+                <span id="chartToggleIcon" class="text-slate-400 hover:text-slate-600 text-xs"><i class="fa-solid fa-chevron-down"></i></span>
+            </div>
+            <div id="chartContainer" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                <div class="h-44 flex justify-center items-center">
+                    <canvas id="statusChart"></canvas>
+                </div>
+                <div class="md:col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs text-slate-600 space-y-2">
+                    <h4 class="font-bold text-slate-800 text-sm">💡 Ordering Rules &amp; Remarks (စည်းမျဉ်းများ)</h4>
+                    <ul class="space-y-1.5 list-disc pl-4">
+                        <li><b class="text-red-600">🚨 အော်ဒါမှာရန် (Order Now):</b> လက်ရှိ Onhand Qty သည် Min Qty ထက် နည်းနေချိန်တွင် ပြသမည်။ မှာယူရန်အကြံပြုအရေအတွက် = <code class="bg-slate-200 px-1 py-0.5 rounded text-slate-800">Max Qty - Onhand Qty</code></li>
+                        <li><b class="text-amber-600">⚖️ လိုအပ်သလိုမှာရန် (Order as Needed):</b> လက်ရှိ Onhand Qty သည် Min Qty နှင့် Max Qty ကြားတွင် ရှိနေချိန်တွင် ပြသမည်။</li>
+                        <li><b class="text-emerald-600">✅ ပစ္စည်းလုံလောက်မှုရှိ (Sufficient):</b> လက်ရှိ Onhand Qty သည် Max Qty ထက် ကျော်လွန်နေချိန်တွင် ပြသမည်။</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls & Search Bar -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 justify-between items-center">
+            <!-- Search & Filters Left -->
+            <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                <!-- Search Box -->
+                <div class="relative flex-1 md:w-64">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Code, Description ရှာရန်..." class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition">
+                </div>
+
+                <!-- Status Filter -->
+                <select id="statusFilter" onchange="applyFilters()" class="py-2 px-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700">
+                    <option value="ALL">အခြေအနေ အားလုံး (All Status)</option>
+                    <option value="ORDER">🚨 အော်ဒါမှာရန် (Order Now)</option>
+                    <option value="OPTIMAL">⚖️ လိုအပ်သလိုမှာရန် (Optimal)</option>
+                    <option value="OVERSTOCK">✅ ပစ္စည်းလုံလောက်မှုရှိ (Sufficient)</option>
+                </select>
+
+                <!-- Vendor Filter -->
+                <select id="vendorFilter" onchange="applyFilters()" class="py-2 px-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700">
+                    <option value="ALL">Main Vendor အားလုံး</option>
+                </select>
+            </div>
+
+            <!-- Right Action Buttons -->
+            <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+                <button onclick="addNewRow()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-plus text-xs"></i> ပစ္စည်းသစ်ထည့်ရန်
+                </button>
+                <div class="relative inline-block text-left">
+                    <button onclick="toggleExportMenu()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-download"></i> Export အိတ်ပို့ရန် <i class="fa-solid fa-chevron-down text-xs"></i>
+                    </button>
+                    <!-- Export Dropdown -->
+                    <div id="exportMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20 py-1">
+                        <button onclick="exportToExcel('ALL')" class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                            <i class="fa-solid fa-file-excel text-emerald-600"></i> သုံးသပ်ချက် အပြည့်အစုံ (.xlsx)
+                        </button>
+                        <button onclick="exportToExcel('ORDER')" class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100">
+                            <i class="fa-solid fa-cart-shopping text-red-500"></i> မှာယူရန် ပစ္စည်းများသီးသန့် (Order List)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table Area -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="table-container overflow-x-auto max-h-[580px]">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead class="bg-slate-100 text-slate-600 uppercase text-xs tracking-wider sticky top-0 z-10 border-b border-slate-200">
+                        <tr>
+                            <th class="py-3 px-4 font-bold">Stock Code</th>
+                            <th class="py-3 px-4 font-bold">Description</th>
+                            <th class="py-3 px-4 font-bold">Short Desc</th>
+                            <th class="py-3 px-4 font-bold">Main Vendor</th>
+                            <th class="py-3 px-4 font-bold text-right">Min Qty</th>
+                            <th class="py-3 px-4 font-bold text-right">Max Qty</th>
+                            <th class="py-3 px-4 font-bold text-right">Onhand Qty</th>
+                            <th class="py-3 px-4 font-bold text-center">Stock Level Bar</th>
+                            <th class="py-3 px-4 font-bold text-right">Suggested Order Qty</th>
+                            <th class="py-3 px-4 font-bold text-center">Remarks / အခြေအနေ</th>
+                            <th class="py-3 px-4 font-bold text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stockTableBody" class="divide-y divide-slate-100 text-slate-700">
+                        <!-- Dynamic Rows loaded via JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Table Footer Status Info -->
+            <div class="bg-slate-50 px-4 py-3 border-t border-slate-200 flex flex-wrap justify-between items-center text-xs text-slate-500">
+                <span id="showingCountText">ပြသထားသော အရေအတွက် - 0 / 0</span>
+                <span>💡 ဇယားထဲရှိ <span class="text-indigo-600 font-semibold">Min Qty, Max Qty, Onhand Qty</span> များကို တိုက်ရိုက် ပြင်ဆင်နိုင်ပါသည်။</span>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl transition-all duration-300 opacity-0 transform translate-y-10 pointer-events-none z-50 flex items-center gap-2 text-sm">
+        <i id="toastIcon" class="fa-solid fa-circle-info text-indigo-400"></i>
+        <span id="toastMsg">သတင်းအချက်အလက်</span>
+    </div>
+
+    <!-- Custom Modal Dialog (Replaces native alert/confirm) -->
+    <div id="customModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 id="modalTitle" class="text-lg font-bold text-slate-800">အသိပေးချက်</h3>
+            <p id="modalBody" class="text-sm text-slate-600">မက်ဆေ့ခ်ျ</p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button id="modalCancelBtn" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition hidden">မလုပ်တော့ပါ</button>
+                <button id="modalConfirmBtn" onclick="closeModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition">လက်ခံသည်</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Core Data State
+        let stockData = [];
+        let filteredData = [];
+        let chartInstance = null;
+
+        // Sample Data for quick testing
+        const sampleItems = [
+            { code: "STK-1001", desc: "Motorola Walkie Talkie T82 Heavy Duty", shortDesc: "Walkie Talkie", vendor: "Alpha Telecom", minQty: 10, maxQty: 50, onhandQty: 3 },
+            { code: "STK-1002", desc: "Dell UltraSharp 27 Inch Monitor 4K", shortDesc: "4K Monitor", vendor: "Tech Hub Myanmar", minQty: 5, maxQty: 20, onhandQty: 12 },
+            { code: "STK-1003", desc: "Logitech MX Master 3S Wireless Mouse", shortDesc: "MX Mouse 3S", vendor: "Tech Hub Myanmar", minQty: 15, maxQty: 40, onhandQty: 45 },
+            { code: "STK-1004", desc: "APC Smart-UPS 1500VA LCD 230V", shortDesc: "APC UPS 1500VA", vendor: "Power Tech Ltd", minQty: 8, maxQty: 25, onhandQty: 8 },
+            { code: "STK-1005", desc: "Cisco Catalyst 24-Port Gigabit Switch", shortDesc: "Cisco Switch 24P", vendor: "Global Network Co", minQty: 4, maxQty: 15, onhandQty: 1 },
+            { code: "STK-1006", desc: "HP LaserJet Pro M404dn Printer", shortDesc: "HP LaserJet Printer", vendor: "Office Depot Myanmar", minQty: 6, maxQty: 18, onhandQty: 25 },
+            { code: "STK-1007", desc: "Kingston 16GB DDR4 3200MHz RAM", shortDesc: "RAM 16GB DDR4", vendor: "Tech Hub Myanmar", minQty: 20, maxQty: 100, onhandQty: 14 },
+            { code: "STK-1008", desc: "Cat6 UTP Network Cable Box 305m", shortDesc: "Cat6 Cable Box", vendor: "Global Network Co", minQty: 5, maxQty: 30, onhandQty: 18 }
+        ];
+
+        window.onload = function() {
+            initChart();
+            loadSampleData();
+            setupDragAndDrop();
+        };
+
+        // Initialize Chart.js
+        function initChart() {
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['အော်ဒါမှာရန်', 'လိုအပ်သလိုမှာရန်', 'ပစ္စည်းလုံလောက်မှုရှိ'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: ['#ef4444', '#f59e0b', '#10b981'],
+                        hoverOffset: 4,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { font: { family: 'Padauk', size: 11 } } }
+                    },
+                    cutout: '70%'
+                }
+            });
+        }
+
+        // Load Sample Data
+        function loadSampleData() {
+            stockData = JSON.parse(JSON.stringify(sampleItems));
+            processAndRender();
+            showToast("နမူနာဒေတာများ ထည့်သွင်းပြီးပါပြီ", "success");
+        }
+
+        // Setup Drag and Drop
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById('dropZone');
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.classList.add('bg-indigo-50', 'border-indigo-400');
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.classList.remove('bg-indigo-50', 'border-indigo-400');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) {
+                    parseExcelFile(files[0]);
+                }
+            });
+        }
+
+        // File Select Handler
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                parseExcelFile(file);
+            }
+        }
+
+        // Parse Uploaded Excel File
+        function parseExcelFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                    if (!jsonRows || jsonRows.length === 0) {
+                        showModal("ဖိုင်ထဲတွင် ဒေတာမရှိပါ သို့မဟုတ် ဖိုင်ဖတ်ရှု၍မရပါ။", "ဒေတာမတွေ့ရှိပါ");
+                        return;
+                    }
+
+                    // Map columns dynamically
+                    stockData = jsonRows.map((row, idx) => {
+                        return {
+                            code: getVal(row, ["Stock Code", "StockCode", "Code", "စတော့ကုဒ်", "SKU"]) || `SKU-${idx + 1}`,
+                            desc: getVal(row, ["Description", "Item Name", "Desc", "အသေးစိတ်ဖော်ပြချက်"]),
+                            shortDesc: getVal(row, ["Short Description", "Short Desc", "ShortDesc", "အတိုချုံ့ဖော်ပြချက်"]),
+                            vendor: getVal(row, ["Main Vendor", "Vendor", "Supplier", "ပင်မရောင်းချသူ"]),
+                            minQty: parseFloat(getVal(row, ["Min Qty", "MinQty", "Min", "အနည်းဆုံး"])) || 0,
+                            maxQty: parseFloat(getVal(row, ["Max Qty", "MaxQty", "Max", "အများဆုံး"])) || 0,
+                            onhandQty: parseFloat(getVal(row, ["Onhand Qty", "OnhandQty", "Onhand", "On Hand", "လက်ရှိ"])) || 0
+                        };
+                    });
+
+                    processAndRender();
+                    showToast(`Excel ဖိုင်မှ ပစ္စည်း (${stockData.length}) မျိုးကို ဖတ်ရှုပြီးပါပြီ`, "success");
+
+                } catch (err) {
+                    console.error(err);
+                    showModal("Excel ဖိုင် ဖတ်ရှုရာတွင် အမှားအယွင်းရှိနေပါသည်။ ကျေးဇူးပြု၍ စံပြ Template အတိုင်း ဖိုင်ဖြစ်ကြောင်း စစ်ဆေးပါ။", "ဖိုင်ဖတ်မရပါ");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Helper to match column names flexibly
+        function getVal(row, possibleKeys) {
+            const keys = Object.keys(row);
+            for (let key of keys) {
+                const cleanKey = key.trim().toLowerCase();
+                for (let pKey of possibleKeys) {
+                    if (cleanKey === pKey.trim().toLowerCase()) {
+                        return row[key];
+                    }
+                }
+            }
+            return "";
+        }
+
+        // Process Data & Update UI
+        function processAndRender() {
+            populateVendorDropdown();
+            applyFilters();
+        }
+
+        // Populate Main Vendor Dropdown Filter
+        function populateVendorDropdown() {
+            const vendorSelect = document.getElementById('vendorFilter');
+            const vendors = [...new Set(stockData.map(item => item.vendor).filter(Boolean))].sort();
+
+            const currentVal = vendorSelect.value;
+            vendorSelect.innerHTML = `<option value="ALL">Main Vendor အားလုံး (${vendors.length})</option>`;
+
+            vendors.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = v;
+                vendorSelect.appendChild(opt);
+            });
+
+            if (vendors.includes(currentVal)) {
+                vendorSelect.value = currentVal;
+            }
+        }
+
+        // Calculate Ordering Status
+        function calculateStatus(min, max, onhand) {
+            min = Number(min) || 0;
+            max = Number(max) || 0;
+            onhand = Number(onhand) || 0;
+
+            if (onhand < min) {
+                const suggestedOrder = Math.max(0, max - onhand);
+                return {
+                    code: "ORDER",
+                    label: "🚨 အော်ဒါမှာရန်",
+                    badgeClass: "bg-red-100 text-red-700 border-red-300",
+                    suggestedOrder: suggestedOrder,
+                    levelPercent: max > 0 ? Math.min(100, Math.round((onhand / max) * 100)) : 0,
+                    barColor: "bg-red-500"
+                };
+            } else if (onhand > max) {
+                return {
+                    code: "OVERSTOCK",
+                    label: "✅ ပစ္စည်းလုံလောက်မှုရှိ",
+                    badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300",
+                    suggestedOrder: 0,
+                    levelPercent: 100,
+                    barColor: "bg-emerald-500"
+                };
+            } else {
+                return {
+                    code: "OPTIMAL",
+                    label: "⚖️ လိုအပ်သလိုမှာရန်",
+                    badgeClass: "bg-amber-100 text-amber-800 border-amber-300",
+                    suggestedOrder: 0, // Option to order up to max if needed
+                    levelPercent: max > 0 ? Math.min(100, Math.round((onhand / max) * 100)) : 50,
+                    barColor: "bg-amber-500"
+                };
+            }
+        }
+
+        // Apply Filters & Search
+        function applyFilters() {
+            const searchTxt = document.getElementById('searchInput').value.trim().toLowerCase();
+            const statusVal = document.getElementById('statusFilter').value;
+            const vendorVal = document.getElementById('vendorFilter').value;
+
+            filteredData = stockData.filter(item => {
+                const status = calculateStatus(item.minQty, item.maxQty, item.onhandQty);
+
+                const matchesSearch = !searchTxt || 
+                    (item.code && item.code.toLowerCase().includes(searchTxt)) ||
+                    (item.desc && item.desc.toLowerCase().includes(searchTxt)) ||
+                    (item.shortDesc && item.shortDesc.toLowerCase().includes(searchTxt)) ||
+                    (item.vendor && item.vendor.toLowerCase().includes(searchTxt));
+
+                const matchesStatus = (statusVal === "ALL") || (status.code === statusVal);
+                const matchesVendor = (vendorVal === "ALL") || (item.vendor === vendorVal);
+
+                return matchesSearch && matchesStatus && matchesVendor;
+            });
+
+            renderTable();
+            updateSummaryKPIs();
+        }
+
+        // Render Table Rows
+        function renderTable() {
+            const tbody = document.getElementById('stockTableBody');
+            tbody.innerHTML = "";
+
+            if (filteredData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="11" class="text-center py-12 text-slate-400">
+                            <i class="fa-solid fa-box-open text-4xl mb-3 block"></i>
+                            ကိုက်ညီသော စတော့ဒေတာ မတွေ့ရှိပါ။
+                        </td>
+                    </tr>
+                `;
+                document.getElementById('showingCountText').textContent = `ပြသထားသော အရေအတွက် - 0 / ${stockData.length}`;
+                return;
+            }
+
+            filteredData.forEach((item, index) => {
+                const originalIndex = stockData.indexOf(item);
+                const status = calculateStatus(item.minQty, item.maxQty, item.onhandQty);
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/80 transition border-b border-slate-100";
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-semibold text-slate-800">
+                        <input type="text" value="${escapeHtml(item.code)}" onchange="updateRowField(${originalIndex}, 'code', this.value)" class="w-full bg-transparent focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-0.5 border border-transparent hover:border-slate-300 text-xs">
+                    </td>
+                    <td class="py-3 px-4">
+                        <input type="text" value="${escapeHtml(item.desc)}" onchange="updateRowField(${originalIndex}, 'desc', this.value)" class="w-full bg-transparent focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-0.5 border border-transparent hover:border-slate-300 text-xs font-medium">
+                    </td>
+                    <td class="py-3 px-4">
+                        <input type="text" value="${escapeHtml(item.shortDesc)}" onchange="updateRowField(${originalIndex}, 'shortDesc', this.value)" class="w-full bg-transparent focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-0.5 border border-transparent hover:border-slate-300 text-xs text-slate-500">
+                    </td>
+                    <td class="py-3 px-4">
+                        <input type="text" value="${escapeHtml(item.vendor)}" onchange="updateRowField(${originalIndex}, 'vendor', this.value)" class="w-full bg-transparent focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-0.5 border border-transparent hover:border-slate-300 text-xs">
+                    </td>
+                    <td class="py-3 px-4 text-right">
+                        <input type="number" min="0" value="${item.minQty}" onchange="updateRowField(${originalIndex}, 'minQty', this.value)" class="w-20 text-right bg-slate-50 focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-0.5 border border-slate-200 text-xs font-semibold text-slate-700">
+                    </td>
+                    <td class="py-3 px-4 text-right">
+                        <input type="number" min="0" value="${item.maxQty}" onchange="updateRowField(${originalIndex}, 'maxQty', this.value)" class="w-20 text-right bg-slate-50 focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-0.5 border border-slate-200 text-xs font-semibold text-slate-700">
+                    </td>
+                    <td class="py-3 px-4 text-right">
+                        <input type="number" min="0" value="${item.onhandQty}" onchange="updateRowField(${originalIndex}, 'onhandQty', this.value)" class="w-20 text-right ${status.code === 'ORDER' ? 'bg-red-50 text-red-700 font-bold border-red-200' : 'bg-slate-50 text-slate-800'} focus:bg-white focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-0.5 border text-xs">
+                    </td>
+                    <!-- Stock Level Bar -->
+                    <td class="py-3 px-4 text-center">
+                        <div class="w-24 bg-slate-200 h-2.5 rounded-full overflow-hidden mx-auto" title="${status.levelPercent}% of Max Qty">
+                            <div class="${status.barColor} h-full transition-all duration-300" style="width: ${status.levelPercent}%"></div>
+                        </div>
+                        <span class="text-[10px] text-slate-400 mt-0.5 block">${status.levelPercent}%</span>
+                    </td>
+                    <td class="py-3 px-4 text-right font-bold ${status.suggestedOrder > 0 ? 'text-red-600' : 'text-slate-400'}">
+                        ${status.suggestedOrder > 0 ? status.suggestedOrder.toLocaleString() : '-'}
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${status.badgeClass} status-badge">
+                            ${status.label}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="deleteRow(${originalIndex})" class="text-slate-400 hover:text-red-600 transition p-1" title="ဖျက်ရန်">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('showingCountText').textContent = `ပြသထားသော အရေအတွက် - ${filteredData.length} / ${stockData.length}`;
+        }
+
+        // Update Row Value
+        function updateRowField(index, field, value) {
+            if (field === 'minQty' || field === 'maxQty' || field === 'onhandQty') {
+                stockData[index][field] = parseFloat(value) || 0;
+            } else {
+                stockData[index][field] = value;
+            }
+            processAndRender();
+        }
+
+        // Delete Row
+        function deleteRow(index) {
+            stockData.splice(index, 1);
+            processAndRender();
+            showToast("ပစ္စည်းအချက်အလက် ပယ်ဖျက်ပြီးပါပြီ", "info");
+        }
+
+        // Add New Row
+        function addNewRow() {
+            stockData.unshift({
+                code: `SKU-${Date.now().toString().slice(-4)}`,
+                desc: "ပစ္စည်းအသစ်ဖော်ပြချက်",
+                shortDesc: "Short Desc",
+                vendor: "Main Vendor",
+                minQty: 10,
+                maxQty: 50,
+                onhandQty: 0
+            });
+            processAndRender();
+            showToast("ပစ္စည်းအသစ် ထည့်သွင်းပြီးပါပြီ", "success");
+        }
+
+        // Summary KPI Update
+        function updateSummaryKPIs() {
+            let total = stockData.length;
+            let needOrderCount = 0;
+            let optimalCount = 0;
+            let overstockCount = 0;
+
+            stockData.forEach(item => {
+                const st = calculateStatus(item.minQty, item.maxQty, item.onhandQty);
+                if (st.code === "ORDER") needOrderCount++;
+                else if (st.code === "OPTIMAL") optimalCount++;
+                else if (st.code === "OVERSTOCK") overstockCount++;
+            });
+
+            document.getElementById('statTotalItems').textContent = total.toLocaleString();
+            document.getElementById('statNeedOrder').textContent = needOrderCount.toLocaleString();
+            document.getElementById('statOptimal').textContent = optimalCount.toLocaleString();
+            document.getElementById('statOverstock').textContent = overstockCount.toLocaleString();
+
+            // Update Chart
+            if (chartInstance) {
+                chartInstance.data.datasets[0].data = [needOrderCount, optimalCount, overstockCount];
+                chartInstance.update();
+            }
+        }
+
+        // Download Sample Excel Template
+        function downloadTemplate() {
+            const templateData = [
+                { "Stock Code": "STK-1001", "Description": "Sample Item Description A", "Short Description": "Item A", "Main Vendor": "Vendor Alpha", "Min Qty": 10, "Max Qty": 50, "Onhand Qty": 5 },
+                { "Stock Code": "STK-1002", "Description": "Sample Item Description B", "Short Description": "Item B", "Main Vendor": "Vendor Beta", "Min Qty": 20, "Max Qty": 100, "Onhand Qty": 20 },
+                { "Stock Code": "STK-1003", "Description": "Sample Item Description C", "Short Description": "Item C", "Main Vendor": "Vendor Alpha", "Min Qty": 15, "Max Qty": 60, "Onhand Qty": 85 }
+            ];
+
+            const ws = XLSX.utils.json_to_sheet(templateData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Stock Template");
+            XLSX.writeFile(wb, "Stock_Ordering_Template.xlsx");
+            showToast("Sample Excel Template ဒေါင်းလုဒ်ဆွဲပြီးပါပြီ", "success");
+        }
+
+        // Export Data to Excel
+        function exportToExcel(type) {
+            toggleExportMenu(true); // close menu
+
+            let dataToExport = stockData;
+            if (type === "ORDER") {
+                dataToExport = stockData.filter(item => {
+                    const st = calculateStatus(item.minQty, item.maxQty, item.onhandQty);
+                    return st.code === "ORDER";
+                });
+            }
+
+            if (dataToExport.length === 0) {
+                showModal("Export ထုတ်ရန် ဒေတာမရှိပါ သို့မဟုတ် မှာယူရန်ပစ္စည်း မရှိပါ။", "သတိပေးချက်");
+                return;
+            }
+
+            const exportFormatted = dataToExport.map(item => {
+                const st = calculateStatus(item.minQty, item.maxQty, item.onhandQty);
+                return {
+                    "Stock Code": item.code,
+                    "Description": item.desc,
+                    "Short Description": item.shortDesc,
+                    "Main Vendor": item.vendor,
+                    "Min Qty": item.minQty,
+                    "Max Qty": item.maxQty,
+                    "Onhand Qty": item.onhandQty,
+                    "Suggested Order Qty": st.suggestedOrder,
+                    "Remarks / Status": st.label.replace(/[\uE000-\uF8FF]/g, '').trim() // Clean icons
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(exportFormatted);
+            const wb = XLSX.utils.book_new();
+            const sheetName = type === "ORDER" ? "Purchase Order List" : "Stock Analysis";
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+            const fileName = type === "ORDER" ? "Stock_Reorder_List.xlsx" : "Stock_Ordering_Analysis.xlsx";
+            XLSX.writeFile(wb, fileName);
+
+            showToast("Excel ဖိုင် ထုတ်ယူပြီးပါပြီ", "success");
+        }
+
+        // Toggle Export Dropdown
+        function toggleExportMenu(forceClose = false) {
+            const menu = document.getElementById('exportMenu');
+            if (forceClose || !menu.classList.contains('hidden')) {
+                menu.classList.add('hidden');
+            } else {
+                menu.classList.remove('hidden');
+            }
+        }
+
+        // Toggle Chart View
+        function toggleChart() {
+            const container = document.getElementById('chartContainer');
+            const icon = document.getElementById('chartToggleIcon');
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                icon.innerHTML = `<i class="fa-solid fa-chevron-up"></i>`;
+            } else {
+                container.classList.add('hidden');
+                icon.innerHTML = `<i class="fa-solid fa-chevron-down"></i>`;
+            }
+        }
+
+        // UI Toast Notification
+        function showToast(message, type = "info") {
+            const toast = document.getElementById('toast');
+            const msg = document.getElementById('toastMsg');
+            const icon = document.getElementById('toastIcon');
+
+            msg.textContent = message;
+
+            if (type === "success") {
+                icon.className = "fa-solid fa-circle-check text-emerald-400";
+            } else if (type === "error") {
+                icon.className = "fa-solid fa-circle-xmark text-red-400";
+            } else {
+                icon.className = "fa-solid fa-circle-info text-indigo-400";
+            }
+
+            toast.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none');
+                toast.classList.remove('opacity-100', 'translate-y-0');
+            }, 3000);
+        }
+
+        // Modal Box Alert (Replaces native alert)
+        function showModal(bodyText, titleText = "အသိပေးချက်") {
+            document.getElementById('modalTitle').textContent = titleText;
+            document.getElementById('modalBody').textContent = bodyText;
+            document.getElementById('customModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('customModal').classList.add('hidden');
+        }
+
+        // Helper string escape
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
