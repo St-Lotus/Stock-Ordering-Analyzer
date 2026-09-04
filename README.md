@@ -1,2 +1,2 @@
-# Barcode-Print
-barcode printer
+# Stock-Ordering-Analyzer
+stock ordering
